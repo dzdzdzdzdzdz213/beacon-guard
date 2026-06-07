@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -32,52 +31,38 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	// Allow the current process to lock memory for eBPF maps
 	if err := rlimit.RemoveMemlock(); err != nil {
 		log.Fatalf("Failed to remove memlock: %v", err)
 	}
 
-	// Load the compiled BPF object
-	spec, err := ebpf.LoadCollectionSpec("beacon_guard.bpf.o")
+	spec, err := ebpf.LoadCollectionSpec("../bpf/syscall_monitor.bpf.o")
 	if err != nil {
 		log.Fatalf("Failed to load BPF spec: %v", err)
 	}
 
-	var objs bpfObjects
-	if err := spec.LoadAndAssign(&objs, nil); err != nil {
-		log.Fatalf("Failed to load BPF objects: %v", err)
-	}
-	defer objs.Close()
-
-	// Create ring buffer reader
-	reader, err := ebpf.NewReader(objs.Events, 8192)
+	coll, err := ebpf.NewCollection(spec)
 	if err != nil {
-		log.Fatalf("Failed to create ringbuf reader: %v", err)
+		log.Fatalf("Failed to create BPF collection: %v", err)
 	}
-	defer reader.Close()
+	defer coll.Close()
 
-	// Initialize processing pipeline
+	eventsMap, ok := coll.Maps["events"]
+	if !ok {
+		log.Fatalf("events map not found in BPF object")
+	}
+
 	processor := NewEventProcessor(config)
 	engine = NewEngine(config)
+	processor.Start(eventsMap, engine)
 
-	// Start API server
 	apiServer := NewAPIServer(engine, config)
-	apiServer.startAlertConsumer()
+	go apiServer.startAlertConsumer()
 	go apiServer.Start(config.APIPort)
-
-	go processor.Start(reader, engine)
 
 	log.Printf("BeaconGuard v%s loaded and monitoring", version)
 	log.Printf("Suspicion threshold: %d", config.SuspicionThreshold)
 	log.Printf("Learning mode: %v", config.LearningMode)
 
-	if config.LearningMode {
-		log.Println("BEACONGUARD IS IN LEARNING MODE — establishing baseline profiles")
-	} else {
-		log.Println("BEACONGUARD IS IN ENFORCEMENT MODE — anomalies will be blocked")
-	}
-
-	// Wait for shutdown
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig

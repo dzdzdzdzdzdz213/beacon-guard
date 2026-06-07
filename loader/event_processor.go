@@ -5,22 +5,24 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
+	"syscall"
 	"time"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/ringbuf"
 )
 
-// EventProcessor reads from the eBPF ring buffer and dispatches events
 type EventProcessor struct {
 	config *Config
 	stats  *Stats
 }
 
 type Stats struct {
-	EventsProcessed  int64
+	EventsProcessed   int64
 	AnomaliesDetected int64
-	ProcessesKilled  int64
-	StartTime        time.Time
+	ProcessesKilled   int64
+	StartTime         time.Time
 }
 
 func NewEventProcessor(config *Config) *EventProcessor {
@@ -32,7 +34,13 @@ func NewEventProcessor(config *Config) *EventProcessor {
 	}
 }
 
-func (ep *EventProcessor) Start(reader *ebpf.Reader, engine *Engine) {
+func (ep *EventProcessor) Start(eventsMap *ebpf.Map, engine *Engine) {
+	reader, err := ringbuf.NewReader(eventsMap)
+	if err != nil {
+		log.Fatalf("Failed to create ringbuf reader: %v", err)
+	}
+	defer reader.Close()
+
 	log.Println("Event processor started")
 
 	for {
@@ -53,7 +61,6 @@ func (ep *EventProcessor) Start(reader *ebpf.Reader, engine *Engine) {
 			continue
 		}
 
-		// Forward to engine for analysis
 		anomaly := engine.Analyze(event)
 		if anomaly != nil {
 			ep.stats.AnomaliesDetected++
@@ -63,14 +70,14 @@ func (ep *EventProcessor) Start(reader *ebpf.Reader, engine *Engine) {
 }
 
 type Event struct {
-	Pid   int    `json:"pid"`
-	Ppid  int    `json:"ppid"`
-	Uid   int    `json:"uid"`
-	Gid   int    `json:"gid"`
-	Ret   int    `json:"ret"`
-	Type  int    `json:"type"`
-	Comm  string `json:"comm"`
-	Data  map[string]interface{} `json:"data"`
+	Pid  int                    `json:"pid"`
+	Ppid int                    `json:"ppid"`
+	Uid  int                    `json:"uid"`
+	Gid  int                    `json:"gid"`
+	Ret  int                    `json:"ret"`
+	Type int                    `json:"type"`
+	Comm string                 `json:"comm"`
+	Data map[string]interface{} `json:"data"`
 }
 
 func parseEvent(raw []byte) *Event {
@@ -103,7 +110,6 @@ func parseEvent(raw []byte) *Event {
 			raw[46], raw[47], raw[48], raw[49])
 		evt.Data["domain"] = int(binary.LittleEndian.Uint32(raw[50:54]))
 	case 5: // MMAP_EXEC
-		// no extra data
 	case 8: // PTRACE
 		evt.Data["target_pid"] = evt.Ret
 	}
@@ -127,10 +133,8 @@ func (ep *EventProcessor) handleAnomaly(anomaly *Anomaly) {
 	alertJSON, _ := json.Marshal(alert)
 	log.Printf("ANOMALY: %s", string(alertJSON))
 
-	// Forward to API server
 	sendToAPI(alert)
 
-	// Take action if configured
 	if ep.config.AutoKill && anomaly.Action == "kill" {
 		log.Printf("KILLING process %d (%s)", anomaly.Pid, anomaly.Comm)
 		ep.stats.ProcessesKilled++
@@ -148,7 +152,6 @@ func cStrToString(data []byte) string {
 }
 
 func sendToAPI(alert map[string]interface{}) {
-	// Non-blocking send — API server can consume from a channel
 	select {
 	case alertChan <- alert:
 	default:
@@ -156,8 +159,6 @@ func sendToAPI(alert map[string]interface{}) {
 }
 
 func killProcess(pid int) {
-	// Send SIGKILL to the process
-	// This crosses into the eBPF blocklist for future prevention
 	proc, err := os.FindProcess(pid)
 	if err == nil {
 		proc.Signal(syscall.SIGKILL)

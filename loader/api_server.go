@@ -9,7 +9,6 @@ import (
 	"time"
 )
 
-// APIServer provides REST + WebSocket endpoints
 type APIServer struct {
 	engine  *Engine
 	config  *Config
@@ -62,7 +61,6 @@ func (s *APIServer) AddAlert(alert map[string]interface{}) {
 	}
 	s.mu.Unlock()
 
-	// Broadcast to SSE clients
 	data, _ := json.Marshal(alert)
 	msg := fmt.Sprintf("data: %s\n\n", string(data))
 	for _, c := range clients {
@@ -93,16 +91,16 @@ func (s *APIServer) handleProcesses(w http.ResponseWriter, r *http.Request) {
 
 	for _, p := range profiles {
 		result = append(result, map[string]interface{}{
-			"pid":               p.Pid,
-			"comm":              p.Comm,
-			"first_seen":        p.FirstSeen,
-			"last_seen":         p.LastSeen,
-			"exec_count":        p.ExecCount,
+			"pid":                p.Pid,
+			"comm":               p.Comm,
+			"first_seen":         p.FirstSeen,
+			"last_seen":          p.LastSeen,
+			"exec_count":         p.ExecCount,
 			"network_conn_count": p.NetworkConnCount,
-			"file_write_count":  p.FileWriteCount,
-			"suspicion_score":   p.SuspicionScore,
-			"state":             p.State,
-			"anomaly_count":     len(p.Anomalies),
+			"file_write_count":   p.FileWriteCount,
+			"suspicion_score":    p.SuspicionScore,
+			"state":              p.State,
+			"anomaly_count":      len(p.Anomalies),
 		})
 	}
 
@@ -169,5 +167,3 @@ func (s *APIServer) handleSSE(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 }
-
-var engine *Engine
