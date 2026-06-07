@@ -83,8 +83,6 @@ func main() {
 		{"kprobe_udp_send", "kprobe", "", "udp_sendmsg"},
 		{"kprobe_mmap_exec", "kprobe", "", "vm_mmap_pgoff"},
 		{"kprobe_ptrace", "kprobe", "", "security_ptrace_access_check"},
-		{"kprobe_file_write", "kprobe", "", "security_file_permission"},
-		{"kprobe_file_delete", "kprobe", "", "security_inode_unlink"},
 	}
 
 	links := []link.Link{}
