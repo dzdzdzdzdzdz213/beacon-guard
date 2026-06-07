@@ -36,6 +36,9 @@ func (s *APIServer) startAlertConsumer() {
 func (s *APIServer) Start(port int) {
 	mux := http.NewServeMux()
 
+	// Wrap with CORS
+	handler := corsMiddleware(mux)
+
 	mux.HandleFunc("/api/v1/health", s.handleHealth)
 	mux.HandleFunc("/api/v1/stats", s.handleStats)
 	mux.HandleFunc("/api/v1/processes", s.handleProcesses)
@@ -45,7 +48,20 @@ func (s *APIServer) Start(port int) {
 
 	addr := fmt.Sprintf(":%d", port)
 	log.Printf("API server listening on %s", addr)
-	log.Fatal(http.ListenAndServe(addr, mux))
+	log.Fatal(http.ListenAndServe(addr, handler))
+}
+
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (s *APIServer) AddAlert(alert map[string]interface{}) {
