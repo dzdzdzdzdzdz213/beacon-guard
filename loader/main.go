@@ -65,11 +65,11 @@ func main() {
 
 	processor := NewEventProcessor(config)
 	engine = NewEngine(config)
-	processor.Start(eventsMap, engine)
 
 	apiServer := NewAPIServer(engine, config)
 	go apiServer.startAlertConsumer()
 	go apiServer.Start(config.APIPort)
+	go processor.Start(eventsMap, engine)
 
 	log.Printf("BeaconGuard v%s loaded and monitoring", version)
 	log.Printf("Suspicion threshold: %d", config.SuspicionThreshold)
