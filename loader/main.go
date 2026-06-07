@@ -47,34 +47,12 @@ func main() {
 		log.Fatalf("Failed to remove memlock: %v", err)
 	}
 
-	// Load and merge all BPF objects
-	specs := []*ebpf.CollectionSpec{}
-	for _, name := range []string{"syscall_monitor", "process_tracker", "file_monitor", "net_monitor"} {
-		path := filepath.Join(bpfDir, name+".bpf.o")
-		s, err := ebpf.LoadCollectionSpec(path)
-		if err != nil {
-			log.Printf("Note: could not load %s: %v (skipping)", path, err)
-			continue
-		}
-		specs = append(specs, s)
+	spec, err := ebpf.LoadCollectionSpec(filepath.Join(bpfDir, "beacon_guard.bpf.o"))
+	if err != nil {
+		log.Fatalf("Failed to load BPF spec: %v", err)
 	}
 
-	if len(specs) == 0 {
-		log.Fatal("No BPF objects could be loaded")
-	}
-
-	// Merge all specs into one collection
-	merged := specs[0]
-	for _, s := range specs[1:] {
-		for name, prog := range s.Programs {
-			merged.Programs[name] = prog
-		}
-		for name, m := range s.Maps {
-			merged.Maps[name] = m
-		}
-	}
-
-	coll, err := ebpf.NewCollection(merged)
+	coll, err := ebpf.NewCollection(spec)
 	if err != nil {
 		log.Fatalf("Failed to create BPF collection: %v", err)
 	}
