@@ -3,6 +3,7 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
 #include <bpf/bpf_core_read.h>
+#include <bpf/bpf_endian.h>
 #include "common.h"
 
 char LICENSE[] SEC("license") = "GPL";
@@ -22,7 +23,6 @@ extern struct {
 static __always_inline int is_internal_ip(u32 ip) {
   u8 b1 = ip & 0xFF;
   u8 b2 = (ip >> 8) & 0xFF;
-  u8 b3 = (ip >> 16) & 0xFF;
 
   if (b1 == 10) return 1;
   if (b1 == 172 && b2 >= 16 && b2 <= 31) return 1;
@@ -43,7 +43,7 @@ static __always_inline int is_known_bad_port(u16 port) {
   }
 }
 
-// UDP connect (DNS tunneling detection)
+// UDP — DNS tunneling detection
 SEC("kprobe/udp_sendmsg")
 int kprobe_udp_send(struct pt_regs *ctx) {
   struct sock *sk = (struct sock *)PT_REGS_PARM1(ctx);
@@ -53,46 +53,42 @@ int kprobe_udp_send(struct pt_regs *ctx) {
   u16 dport = BPF_CORE_READ(skc, skc_dport);
   dport = bpf_ntohs(dport);
 
-  // DNS is port 53 — flag large DNS queries (tunneling)
-  if (dport == 53) {
-    struct event_t *evt;
-    evt = bpf_ringbuf_reserve(&events, sizeof(struct event_t), 0);
-    if (!evt) return 0;
+  if (dport != 53) return 0;
 
-    u32 pid = bpf_get_current_pid_tgid() >> 32;
-    evt->pid = pid;
-    evt->type = EVENT_CONNECT;
-    evt->net.port = 53;
-    evt->net.domain = AF_INET;
-    bpf_get_current_comm(&evt->comm, sizeof(evt->comm));
+  struct event_t *evt;
+  evt = bpf_ringbuf_reserve(&events, sizeof(struct event_t), 0);
+  if (!evt) return 0;
 
-    struct in6_addr *addr = &skc->skc_daddr;
-    bpf_core_read(&evt->net.ip, 4, &addr->in6_u.u6_addr32);
+  u32 pid = bpf_get_current_pid_tgid() >> 32;
+  evt->pid = pid;
+  evt->type = EVENT_CONNECT;
+  evt->net.port = 53;
+  evt->net.domain = AF_INET;
+  bpf_get_current_comm(&evt->comm, sizeof(evt->comm));
 
-    // Check msg length for tunneling
-    size_t msg_len = BPF_CORE_READ(msg, msg_iter.count);
-    if (msg_len > 512) {
-      evt->ret = 1; // Flag as tunneling suspicion
-      u32 *score = bpf_map_lookup_elem(&suspicion_map, &pid);
-      if (!score) {
-        u32 init = 30;
-        bpf_map_update_elem(&suspicion_map, &pid, &init, BPF_ANY);
-      } else {
-        *score += 30;
-      }
+  __be32 daddr = BPF_CORE_READ(skc, skc_daddr);
+  bpf_core_read(&evt->net.ip, 4, &daddr);
+
+  size_t msg_len = BPF_CORE_READ(msg, msg_iter.count);
+  if (msg_len > 512) {
+    evt->ret = 1;
+    u32 *score = bpf_map_lookup_elem(&suspicion_map, &pid);
+    if (!score) {
+      u32 init = 30;
+      bpf_map_update_elem(&suspicion_map, &pid, &init, BPF_ANY);
+    } else {
+      *score += 30;
     }
-
-    bpf_ringbuf_submit(evt, 0);
   }
 
+  bpf_ringbuf_submit(evt, 0);
   return 0;
 }
 
-// TCP connect monitor with enhanced checks
+// TCP connect with enhanced checks
 SEC("kprobe/tcp_v4_connect")
 int kprobe_tcp_connect_enhanced(struct pt_regs *ctx) {
   struct sock *sk = (struct sock *)PT_REGS_PARM1(ctx);
-  struct sockaddr *uaddr = (struct sockaddr *)PT_REGS_PARM2(ctx);
 
   struct event_t *evt;
   evt = bpf_ringbuf_reserve(&events, sizeof(struct event_t), 0);
@@ -108,14 +104,13 @@ int kprobe_tcp_connect_enhanced(struct pt_regs *ctx) {
   evt->net.port = bpf_ntohs(dport);
   evt->net.domain = AF_INET;
 
-  struct in6_addr *addr = &skc->skc_daddr;
-  bpf_core_read(&evt->net.ip, 4, &addr->in6_u.u6_addr32);
+  __be32 daddr = BPF_CORE_READ(skc, skc_daddr);
+  bpf_core_read(&evt->net.ip, 4, &daddr);
 
   u32 ip4 = *(u32 *)&evt->net.ip;
   int internal = is_internal_ip(ip4);
   int bad_port = is_known_bad_port(evt->net.port);
 
-  // Connection to external + bad port = very suspicious
   if (!internal && bad_port) {
     u32 *score = bpf_map_lookup_elem(&suspicion_map, &pid);
     if (!score) {
@@ -126,9 +121,6 @@ int kprobe_tcp_connect_enhanced(struct pt_regs *ctx) {
     }
     evt->ret = 1;
   }
-
-  // Connection to multiple external IPs in short time (beaconing)
-  // This is tracked in userspace via timestamps
 
   bpf_ringbuf_submit(evt, 0);
   return 0;

@@ -3,6 +3,7 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
 #include <bpf/bpf_core_read.h>
+#include <bpf/bpf_endian.h>
 #include "common.h"
 
 char LICENSE[] SEC("license") = "GPL";
@@ -138,8 +139,8 @@ int kprobe_tcp_connect(struct pt_regs *ctx) {
   u16 dport = BPF_CORE_READ(skc, skc_dport);
   evt->net.port = bpf_ntohs(dport);
 
-  struct in6_addr *addr = &skc->skc_daddr;
-  bpf_core_read(&evt->net.ip, 4, &addr->in6_u.u6_addr32);
+  __be32 daddr = BPF_CORE_READ(skc, skc_daddr);
+  bpf_core_read(&evt->net.ip, 4, &daddr);
 
   // Known malicious IPs (C2, mining pools, etc.)
   u32 ip = *(u32 *)&evt->net.ip;
