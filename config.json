@@ -1,5 +1,5 @@
 {
-  "learning_mode": true,
+  "learning_mode": false,
   "suspicion_threshold": 100,
   "auto_kill": false,
   "api_port": 9090,

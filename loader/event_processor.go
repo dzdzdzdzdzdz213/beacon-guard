@@ -63,6 +63,9 @@ func (ep *EventProcessor) Start(eventsMap *ebpf.Map, engine *Engine) {
 			continue
 		}
 
+		// Forward raw event to API for process tracking
+		ep.forwardEvent(event)
+
 		anomaly := engine.Analyze(event)
 		if anomaly != nil {
 			ep.stats.AnomaliesDetected++
@@ -142,6 +145,24 @@ func (ep *EventProcessor) handleAnomaly(anomaly *Anomaly) {
 		ep.stats.ProcessesKilled++
 		killProcess(anomaly.Pid)
 	}
+}
+
+func (ep *EventProcessor) forwardEvent(event *Event) {
+	go func() {
+		body := map[string]interface{}{
+			"timestamp":   time.Now().UTC().Format(time.RFC3339),
+			"severity":    "info",
+			"rule":        "event",
+			"description": fmt.Sprintf("%s event (pid=%d, type=%d)", event.Comm, event.Pid, event.Type),
+			"pid":         event.Pid,
+			"comm":        event.Comm,
+			"score":       0,
+			"action":      "alert",
+			"details":     event.Data,
+		}
+		data, _ := json.Marshal(body)
+		http.Post("http://localhost:9091/api/v1/alerts", "application/json", bytes.NewReader(data))
+	}()
 }
 
 func cStrToString(data []byte) string {
