@@ -5,7 +5,7 @@ import ProcessTable from './ProcessTable';
 import AlertFeed from './AlertFeed';
 import StatsPanel from './StatsPanel';
 
-const API = process.env.REACT_APP_API || 'http://localhost:9091';
+const API = process.env.REACT_APP_API || 'http://localhost:9090';
 
 export default function App() {
   const [alerts, setAlerts] = useState([]);
