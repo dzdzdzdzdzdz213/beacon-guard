@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"github.com/cilium/ebpf"
@@ -17,6 +18,8 @@ var version = "0.1.0"
 func main() {
 	var configPath string
 	flag.StringVar(&configPath, "config", "config.json", "Path to configuration file")
+	var bpfDir string
+	flag.StringVar(&bpfDir, "bpf-dir", "", "Directory containing .bpf.o files (default: <binary_dir>/../bpf/)")
 	var showVersion bool
 	flag.BoolVar(&showVersion, "version", false, "Show version")
 	flag.Parse()
@@ -24,6 +27,15 @@ func main() {
 	if showVersion {
 		fmt.Printf("BeaconGuard loader v%s\n", version)
 		os.Exit(0)
+	}
+
+	if bpfDir == "" {
+		exe, err := os.Executable()
+		if err == nil {
+			bpfDir = filepath.Join(filepath.Dir(exe), "..", "bpf")
+		} else {
+			bpfDir = "bpf"
+		}
 	}
 
 	config, err := loadConfig(configPath)
@@ -35,12 +47,34 @@ func main() {
 		log.Fatalf("Failed to remove memlock: %v", err)
 	}
 
-	spec, err := ebpf.LoadCollectionSpec("../bpf/syscall_monitor.bpf.o")
-	if err != nil {
-		log.Fatalf("Failed to load BPF spec: %v", err)
+	// Load and merge all BPF objects
+	specs := []*ebpf.CollectionSpec{}
+	for _, name := range []string{"syscall_monitor", "process_tracker", "file_monitor", "net_monitor"} {
+		path := filepath.Join(bpfDir, name+".bpf.o")
+		s, err := ebpf.LoadCollectionSpec(path)
+		if err != nil {
+			log.Printf("Note: could not load %s: %v (skipping)", path, err)
+			continue
+		}
+		specs = append(specs, s)
 	}
 
-	coll, err := ebpf.NewCollection(spec)
+	if len(specs) == 0 {
+		log.Fatal("No BPF objects could be loaded")
+	}
+
+	// Merge all specs into one collection
+	merged := specs[0]
+	for _, s := range specs[1:] {
+		for name, prog := range s.Programs {
+			merged.Programs[name] = prog
+		}
+		for name, m := range s.Maps {
+			merged.Maps[name] = m
+		}
+	}
+
+	coll, err := ebpf.NewCollection(merged)
 	if err != nil {
 		log.Fatalf("Failed to create BPF collection: %v", err)
 	}
@@ -48,7 +82,7 @@ func main() {
 
 	eventsMap, ok := coll.Maps["events"]
 	if !ok {
-		log.Fatalf("events map not found in BPF object")
+		log.Fatal("events map not found in BPF object")
 	}
 
 	processor := NewEventProcessor(config)
