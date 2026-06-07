@@ -156,11 +156,6 @@ func sendToAPI(alert map[string]interface{}) {
 	case alertChan <- alert:
 	default:
 	}
-	// Also forward to Python API
-	go func() {
-		data, _ := json.Marshal(alert)
-		http.Post("http://localhost:9091/api/v1/alerts", "application/json", bytes.NewReader(data))
-	}()
 }
 
 func killProcess(pid int) {
