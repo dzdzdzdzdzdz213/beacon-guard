@@ -1,6 +1,11 @@
 #ifndef __COMMON_H
 #define __COMMON_H
 
+// Kernel constants not exposed in vmlinux.h
+#define MAY_WRITE 2
+#define AF_INET 2
+#define PROT_EXEC 4
+
 #define MAX_PATH 256
 #define MAX_COMM 16
 #define MAX_ARGS 64
