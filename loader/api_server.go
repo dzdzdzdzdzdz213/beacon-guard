@@ -94,8 +94,37 @@ func (s *APIServer) handleHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *APIServer) handleStats(w http.ResponseWriter, r *http.Request) {
+	eng := s.engine.GetStats()
+	severityCounts := map[string]int{"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
+
+	s.mu.RLock()
+	for _, a := range s.alerts {
+		sev, _ := a["severity"].(string)
+		severityCounts[sev]++
+	}
+	alertCount := len(s.alerts)
+	s.mu.RUnlock()
+
+	withAlerts := 0
+	for _, p := range s.engine.GetProfiles() {
+		if len(p.Anomalies) > 0 {
+			withAlerts++
+		}
+	}
+
 	stats := map[string]interface{}{
-		"engine": s.engine.GetStats(),
+		"alerts": map[string]interface{}{
+			"total":        alertCount,
+			"by_severity":  severityCounts,
+			"last_hour":    alertCount,
+		},
+		"processes": map[string]interface{}{
+			"total":       eng["total_processes"],
+			"with_alerts": withAlerts,
+		},
+		"config": map[string]interface{}{
+			"learning_mode": eng["learning_mode"],
+		},
 	}
 	json.NewEncoder(w).Encode(stats)
 }
