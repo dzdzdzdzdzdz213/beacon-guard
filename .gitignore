@@ -1,0 +1,32 @@
+# Go
+loader/beacon-guard
+loader/beacon-guard.exe
+
+# eBPF
+bpf/*.o
+bpf/*.bpf.o
+
+# Node
+frontend/node_modules
+frontend/build
+
+# Python
+__pycache__
+*.pyc
+.venv
+venv
+
+# IDE
+.vscode
+.idea
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Config
+config.local.json
+
+# Docker
+.docker

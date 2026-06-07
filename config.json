@@ -1,0 +1,25 @@
+{
+  "learning_mode": true,
+  "suspicion_threshold": 100,
+  "auto_kill": false,
+  "api_port": 9090,
+  "baseline_window_sec": 3600,
+  "max_connections_per_min": 50,
+  "max_file_writes_per_min": 100,
+  "allowed_executables": [
+    "/usr/bin/ssh",
+    "/usr/bin/curl",
+    "/usr/bin/wget",
+    "/usr/bin/scp",
+    "/usr/bin/rsync",
+    "/usr/bin/git"
+  ],
+  "known_bad_ips": [],
+  "known_bad_hashes": [],
+  "monitor_pids": [],
+  "monitor_users": [],
+  "exclude_pids": [],
+  "response_action": "alert",
+  "webhook_url": "",
+  "syslog_endpoint": ""
+}
