@@ -3,14 +3,11 @@ LLVM_STRIP ?= llvm-strip
 BPFTOOL ?= bpftool
 ARCH ?= x86
 
-KERNEL_RELEASE := $(shell uname -r 2>/dev/null || echo "6.0.0")
-KERNEL_BUILD := /lib/modules/$(KERNEL_RELEASE)/build
-
+# Kali doesn't ship kernel build headers, so use system libbpf + vmlinux.h (CO-RE)
 CFLAGS := -target bpf \
 		  -D__TARGET_ARCH_$(ARCH) \
-		  -I$(KERNEL_BUILD)/tools/include/uapi \
-		  -I$(KERNEL_BUILD)/tools/lib \
-		  -I$(KERNEL_BUILD)/tools/perf \
+		  -I. \
+		  -I/usr/include \
 		  -I/usr/include/x86_64-linux-gnu \
 		  -Wall \
 		  -O2 \
@@ -22,12 +19,15 @@ OBJS := $(SRCS:.bpf.c=.bpf.o)
 
 all: $(OBJS)
 
-%.bpf.o: %.bpf.c common.h
+%.bpf.o: %.bpf.c vmlinux.h common.h
 	$(CLANG) $(CFLAGS) -o $@ $<
 	$(LLVM_STRIP) -g $@
 
+vmlinux.h:
+	$(BPFTOOL) btf dump file /sys/kernel/btf/vmlinux format c > $@
+
 clean:
-	rm -f *.bpf.o
+	rm -f *.bpf.o vmlinux.h
 
 install: all
 	$(BPFTOOL) gen object beacon_guard.bpf.o $(OBJS)
