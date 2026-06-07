@@ -138,5 +138,4 @@ func main() {
 	for _, l := range links {
 		l.Close()
 	}
-	cancel()
 }
