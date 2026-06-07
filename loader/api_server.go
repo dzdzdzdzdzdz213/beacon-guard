@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"sync"
-	"time"
 )
 
 type APIServer struct {
@@ -167,3 +166,5 @@ func (s *APIServer) handleSSE(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 }
+
+var engine *Engine
