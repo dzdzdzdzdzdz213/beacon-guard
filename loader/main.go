@@ -59,12 +59,18 @@ func main() {
 	}
 	defer coll.Close()
 
+	// Debug: list loaded programs
+	log.Printf("Loaded programs:")
+	for name := range coll.Programs {
+		log.Printf("  - %s", name)
+	}
+
 	// ─── Attach programs to kernel hooks ───────────────────────────────
 	type attach struct {
-		name   string
-		typ    string   // "tracepoint" or "kprobe"
+		name     string
+		typ      string // "tracepoint" or "kprobe"
 		category string // tracepoint category or kprobe symbol
-		event   string  // tracepoint name
+		event    string // tracepoint name
 	}
 
 	attachments := []attach{
@@ -86,7 +92,7 @@ func main() {
 	for _, a := range attachments {
 		prog := coll.Programs[a.name]
 		if prog == nil {
-			log.Printf("  ⚠ Program %s not found, skipping", a.name)
+			log.Printf("  Program %s NOT FOUND in collection, skipping", a.name)
 			continue
 		}
 		var l link.Link
@@ -98,11 +104,11 @@ func main() {
 			l, err = link.Kprobe(a.event, prog, nil)
 		}
 		if err != nil {
-			log.Printf("  ⚠ Failed to attach %s: %v", a.name, err)
+			log.Printf("  Failed to attach %s: %v", a.name, err)
 			continue
 		}
 		links = append(links, l)
-		log.Printf("  ✅ Attached %s (%s)", a.name, a.typ)
+		log.Printf("  Attached %s (%s)", a.name, a.typ)
 	}
 
 	if len(links) == 0 {
