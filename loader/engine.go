@@ -369,15 +369,21 @@ func (e *Engine) registerBuiltinRules() {
 			Name: "executable_mmap",
 			Severity: "medium",
 			Score: 30,
-			Description: "Process mapped executable memory",
+			Description: "Sustained executable memory mapping in suspicious process",
 			Action: "alert",
 			Match: func(evt *Event, p *ProcessProfile, bl *Baseline) *Anomaly {
 				if evt.Type != 5 { return nil }
+				// Only alert if process already has suspicion score (combined with other bad behavior)
+				if p.SuspicionScore < 50 { return nil }
+				// Rate limit: at most 1 alert per process
+				for _, a := range p.Anomalies {
+					if a.Rule == "executable_mmap" { return nil }
+				}
 				return &Anomaly{
 					Rule: "executable_mmap",
 					Severity: "medium",
 					Score: 30,
-					Description: "Executable memory mapping",
+					Description: "Suspicious process mapped executable memory",
 					Action: "alert",
 					Details: map[string]interface{}{
 						"pid": evt.Pid,
