@@ -6,7 +6,7 @@
 
 [![License: GPL-2.0](https://img.shields.io/badge/License-GPL_2.0-blue.svg)](https://opensource.org/licenses/GPL-2.0)
 [![Language: C/Go](https://img.shields.io/badge/Language-C%20%7C%20Go-00ADD8.svg)]()
-[![Stars](https://img.shields.io/github/stars/placeholder/beacon--guard?style=social)]()
+[![Stars](https://img.shields.io/github/stars/dzdzdzdzdzdz213/beacon-guard?style=social)]()
 [![Status: Active](https://img.shields.io/badge/Status-Active-brightgreen.svg)]()
 
 </div>
@@ -56,7 +56,7 @@ BeaconGuard is a lightweight kernel-level security monitor that leverages eBPF t
 
 ```bash
 # Clone the repository
-git clone https://github.com/placeholder/beacon-guard.git
+git clone https://github.com/dzdzdzdzdzdz213/beacon-guard.git
 cd beacon-guard
 
 # Build the eBPF programs and Go control plane
